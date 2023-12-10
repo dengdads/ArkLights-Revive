@@ -990,19 +990,6 @@ path.fallback = {
             if appear("面板", 1) then return true end
         end, 5)
     end,
-    九色鹿签到返回 = function()
-        wait(function()
-            tap("九色鹿签到")
-            ssleep(.2)
-        end, 1)
-        wait(function()
-            tap("九色鹿签到返回")
-            ssleep(.2)
-            tap("开包skip")
-            if not appear("面板") then tap("开包skip") end
-            if appear("面板", 1) then return true end
-        end, 5)
-    end,
     端午签到返回 = function()
         wait(function()
             tap("端午签到左")

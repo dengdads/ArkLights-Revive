@@ -2706,6 +2706,8 @@ updateSkill = function(update_info)
             toast("下载最新版本基建图标失败")
             ssleep(3)
             return false
+        else
+            toast("基建图标下载成功")
         end
     else
         toast("基建图标已经是最新版")
@@ -2717,6 +2719,7 @@ updateSkill = function(update_info)
         return false
     end
     unZip(skill_path, skill_extract_path)
+    toast("基建图标解压成功")
     saveConfig("skill_md5", update_info.skillMD5)
     return true
 end
@@ -2746,14 +2749,14 @@ hotUpdate = function()
     end
     local update_info = check_hot_update()
     if not update_info then return false end
-    if not update_info.updateLr and not update_info.updateSkill then
+    if not update_info.updateSkill then
         toast("已经是最新版")
-        uploadStatistician(false)
+        --uploadStatistician(false)
         return true
     end
     updateLr(update_info)
     updateSkill(update_info)
-    uploadStatistician(true)
+    --uploadStatistician(true)
 
     sleep(1000)
     log("更新完成")
