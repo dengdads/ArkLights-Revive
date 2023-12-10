@@ -6,7 +6,7 @@ m = cloud
 m.deviceToken = ''
 m.captchaToken = ''
 m.server = ''
-m.captchaServer = 'https://captcha-arkrec.ngworks.cn'
+m.captchaServer = ''
 m.heartBeatTid = -1
 m.status = 1
 
@@ -135,6 +135,9 @@ m.uploadImgToInquisition = function(img_path)
 end
 
 m.captcha = function()
+    if only_use_ttshitu then
+        return false
+    end
     -- if m.captchaToken == '' or m.captchaServer == '' then
     --   return false
     -- end
@@ -174,7 +177,7 @@ m.captcha = function()
                 x = coord[1] or 0
                 y = coord[2] or 0
                 tap({ image_pos[1] + x, image_pos[2] + y })
-                ssleep(0.5)
+                ssleep(0.3)
             end
             return true
         else
@@ -293,7 +296,7 @@ m.sanReport = function()
     end
     local index = 1
     local san = {}
-    log("理智", sanText)
+    log("理智", '[' .. sanText .. ']')
     for word in string.gmatch(sanText, "%d+") do
         san[index] = word
         index = index + 1
@@ -428,6 +431,16 @@ server=]] .. server
         str(get(config, 'daily', 'offer', 'enable'))
     hook = hook .. [[;now_job_ui11=]] .. str(get(config, 'daily', 'task'))
     hook = hook .. [[;now_job_ui12=]] .. str(get(config, 'daily', 'activity'))
+    --审判庭配置提前写在这里里,如果需要对接审判庭,青在daily属性中添加shopping
+    local shopping_cloud_switch = get(config, 'daily', 'shopping')
+
+    local main_config = loadOneUIConfig("main")
+
+    local shopping_ui_switch = main_config["now_job_ui13"]
+    --审判庭云控不存在则使用本地配置
+    shopping_ui_switch = (shopping_cloud_switch == nil) and shopping_ui_switch or str(shopping_cloud_switch)
+
+    hook = hook .. [[;now_job_ui13=]] .. str(shopping_ui_switch)
 
     hook = hook .. [[;auto_recruit0=]] ..
         str(get(config, 'daily', 'offer', 'other'))

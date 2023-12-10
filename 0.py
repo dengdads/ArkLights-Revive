@@ -75,7 +75,7 @@ class WindowMgr:
         return self._handle
 
 
-def run(now = True):
+def run(now=True):
     """自动运行调试 需提前打开任意lua文件"""
     myWindowMgr = WindowMgr()
     hwnd = myWindowMgr.find_window_wildcard(None, ".*?懒人精灵 - .*?")
@@ -87,7 +87,7 @@ def run(now = True):
         # 设置为当前活动窗口
         win32gui.SetForegroundWindow(hwnd)
         # 最大化窗口
-        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+        # win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
         # F6
         win32api.keybd_event(117, win32api.MapVirtualKey(117, 0), 0, 0)
         win32api.keybd_event(
@@ -102,18 +102,12 @@ def run(now = True):
             )
 
 
-def save(forRelease):
+def save():
     """保存到懒人精灵工程文件夹"""
     with open("main.lua", "r", encoding="utf-8") as f:
         lines = f.readlines()
         ss = ""
         for line in lines:
-            if not forRelease:
-                if re.match("-- disable_hotupdate = true", line):
-                    line = "disable_hotupdate = true\n"
-            else:
-                if re.match("disable_hotupdate = true", line):
-                    line = "-- disable_hotupdate = true\n"
             if re.match('release_date = ".*"', line):
                 line = (
                     'release_date = "'
@@ -147,13 +141,13 @@ def save(forRelease):
 
 def saverun():
     """保存并运行"""
-    save(False)
+    save()
     run()
 
 
 def release(type):
     if type == "RELEASE":
-        save(True)
+        save()
         run(False)
 
         newLrMD5 = input("请输入md5值: ")
@@ -213,15 +207,13 @@ def upload(md5, type, force):
 
     print(response.json().get("msg"))
 
+
 def statistician():
     token = lc.token
     if token == "":
         print("token未配置，请配置token")
         exit()
-    url = (
-        "http://ark.aegirtech.com:8080/getStatistician?token="
-        + token
-    )
+    url = "http://ark.aegirtech.com:8080/getStatistician?token=" + token
     response = requests.request("GET", url)
     info = response.json()["data"]
     print("============统计信息============")
@@ -231,13 +223,14 @@ def statistician():
     print("活跃终端数量:  \t" + str(info["activeAlCount"]))
     print("活跃账号数量:  \t" + str(info["activeAccountCount"]))
 
+
 if __name__ == "__main__":
     try:
         arg = sys.argv[1]
         if arg == "run":
             run()
         elif arg == "save":
-            save(False)
+            save()
         elif arg == "saverun":
             saverun()
         elif arg == "r":

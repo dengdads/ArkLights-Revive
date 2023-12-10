@@ -57,7 +57,11 @@ checkPointColor = function(pInfo, confidence)
         keepCapture()
     end
 
-    local colorStr = pInfo[1] .. "|" .. pInfo[2] .. "|" .. pInfo[3]
+    if type(pInfo) == "table" then
+        colorStr = pInfo[1] .. "|" .. pInfo[2] .. "|" .. pInfo[3]
+    elseif type(pInfo) == "string" then
+        colorStr = pInfo
+    end
 
     -- 比色
     if cmpColorEx(colorStr, confidence) == 1 then
@@ -1743,7 +1747,7 @@ delele_download_file = function()
 end
 
 -- 解析官服重定向地址
-function parse_download_url(url)
+parse_download_url = function(url)
     local http = require("socket.http")
     local url = url
     local response, code, headers, status = http.request {
@@ -1754,5 +1758,200 @@ function parse_download_url(url)
     if code == 302 then
         local redirect = headers.location
         return redirect
+    end
+end
+
+-- 对b服数据库执行sqlite命令
+bilibili_database_parse = function(command)
+    if sqlite3path == nil or fileExist(sqlite3path) == false then
+        sqlite3path = "sqlite3"
+    end
+    local command = [[su root sh -c "]] ..
+        sqlite3path .. [[ /data/user/0/com.hypergryph.arknights.bilibili/databases/users.db ']] .. command .. [['"]]
+    log(command)
+    ret = exec(command)
+    return ret
+end
+
+-- 设置自动登录账户的uid
+bilibili_set_login_uid = function(uid)
+    if uid == nil then
+        log("uid为空")
+        return false
+    end
+    local command = string.format("UPDATE users SET last_login = CASE WHEN uid = '%d' THEN 1 ELSE 0 END;", uid)
+    local ret = bilibili_database_parse(command)
+    log(ret)
+    return ret
+end
+
+-- 获取自动登录账户的uid，也就是当前登录的账户，返回uid
+bilibili_get_lastlogin_uid = function()
+    local command = "SELECT uid FROM users WHERE last_login = 1;"
+    return bilibili_database_parse(command)
+end
+
+-- 判断账户在数据库中是否存在
+bilibili_is_uid_exist = function(uid)
+    if uid == nil then
+        log("uid为空")
+        return false
+    end
+    local command = string.format("SELECT COUNT(*) FROM users WHERE uid=%d;", uid)
+    if tonumber(bilibili_database_parse(command)) == 1 then
+        return true
+    else
+        return false
+    end
+end
+
+-- 返回官服所有账户的登录数据
+official_get_user_cache = function()
+    exec2(string.format(
+        [[su root sh -c "cp '/data/user/0/com.hypergryph.arknights/shared_prefs/HypergryphSdkPreferences.xml' '%s'"]],
+        getWorkPath() .. "/HypergryphSdkPreferences.xml"))
+    setFilePremission(getWorkPath() .. "/HypergryphSdkPreferences.xml", nil)
+    local file = io.open(getWorkPath() .. "/HypergryphSdkPreferences.xml", "r")
+    local xml = file:read("*a")
+    file:close()
+    log(xml)
+    return xml:match("<string%s+name=\"USER_CACHE\">(.-)</string>")
+end
+
+-- 返回最后登录的账户，string
+official_get_last_login = function()
+    local data = official_get_user_cache()
+    data = data:gsub('&quot;', '"')
+    data = JsonDecode(data)
+    data = JsonEncode({ data[1] })
+    data = data:gsub('"', '&quot;')
+    return data
+end
+
+-- 设置官服登录账户
+official_set_login_user = function(data)
+    data = data or ""
+    if data == "" then
+        log("data为空")
+        return false
+    end
+    exec2(string.format(
+        [[su root sh -c "cp '/data/user/0/com.hypergryph.arknights/shared_prefs/HypergryphSdkPreferences.xml' '%s'"]],
+        getWorkPath() .. "/HypergryphSdkPreferences.xml"))
+    setFilePremission(getWorkPath() .. "/HypergryphSdkPreferences.xml", nil)
+    local file = io.open(getWorkPath() .. "/HypergryphSdkPreferences.xml", "r+")
+    local xml = file:read("*a")
+    xml = xml:gsub("<string%s+name=\"USER_CACHE\">.-</string>", '<string name="USER_CACHE">' .. data .. '</string>')
+    log(xml)
+    file:seek("set", 0)
+    file:write(xml)
+    file:close()
+    exec2(string.format(
+        [[su root sh -c "cp '%s' '/data/user/0/com.hypergryph.arknights/shared_prefs/HypergryphSdkPreferences.xml'"]],
+        getWorkPath() .. "/HypergryphSdkPreferences.xml"))
+    return true
+end
+
+exec2 = function(command)
+    local file = io.popen(command)
+    local ret = file:read("*a")
+    file:close()
+    return ret
+end
+
+-- 保存自定义配置
+save_local_config = function(filename, key, value)
+    local value = value or ""
+    local filePath = getWorkPath() .. "/" .. filename .. ".json"
+    local Config = {}
+    local file = io.open(filePath, "r")
+    if file then
+        local json = file:read("*a")
+        Config = JsonDecode(json)
+        file:close()
+    end
+    Config[key] = value
+    file = io.open(filePath, "w")
+    if file then
+        local json = JsonEncode(Config)
+        file:write(json)
+        file:close()
+        return true
+    else
+        return false
+    end
+end
+
+-- 读取自定义配置
+read_local_config = function(filename, key)
+    local filePath = getWorkPath() .. "/" .. filename .. ".json"
+    local file = io.open(filePath, "r")
+    if file then
+        local json = file:read("*a")
+        local config = JsonDecode(json)
+        file:close()
+        return config[key]
+    else
+        return nil
+    end
+end
+
+setFilePremission = function(filename, premission)
+    if premission == nil then premission = 777 end
+    exec('su root sh -c "chmod ' .. premission .. ' ' .. filename .. '"')
+end
+
+-- 从字符串中提取数字，返回table
+extractNumbers = function(str)
+    local pattern = "%d+"
+    local numbers = {}
+    for number in string.gmatch(str, pattern) do
+        table.insert(numbers, tonumber(number))
+    end
+    return numbers
+end
+
+-- 点击并判断前后颜色是否改变 默认比较点击位置
+tap_cmpcol = function(x, colorposition, confidence, wait_time)
+    if type(x) ~= "table" then return false end
+    wait_time = wait_time or 0.1
+    confidence = confidence or default_findcolor_confidence
+    colorposition = colorposition or x
+    local oricol = getColor(colorposition[1], colorposition[2])
+    tap(x)
+    ssleep(wait_time)
+    return (not compareColor(colorposition[1], colorposition[2], string.format("#%s", oricol), confidence))
+end
+
+contains_character = function(str, table)
+    for _, char in ipairs(table) do
+        if string.find(str, char) then
+            return char
+        end
+    end
+    return nil
+end
+
+find_color = function(v, color, dir, condifence)
+    color = color or "000000"
+    if v == nil then v = { 0, 0, 0, 0 } end
+    if v == true then return true end
+    if type(v) == "function" then return v() end
+    if type(v) == "string" and not v:find(coord_delimeter) then v = point[v] end
+    if type(v) == "string" and v:find(coord_delimeter) then return nil end
+    if #v ~= 4 then return nil end
+    dir = dir or 1
+    -- 0: 表示从左上向右下；
+    -- 1: 表示从中心往四周查找；
+    -- 2: 表示从右下向左上查找；
+    -- 3: 表示从左下向右上查找；
+    -- 4：表示从右上向左下查找
+    condifence = condifence or 1
+    local index, x, y = findColor(v[1], v[2], v[3], v[4], color, dir, condifence)
+    log(index, x, y)
+    if x > -1 and y > -1 then
+        return { x, y }
+    else
+        return nil
     end
 end

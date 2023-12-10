@@ -2049,6 +2049,7 @@ all_job = {
     "邮件收取", "轮次作战", "访问好友", "基建收获",
     "基建换班", "制造加速", "线索交流", "副手换人",
     "信用购买", "公开招募", "任务收集", "限时活动",
+    "商店搬空",
 }
 
 now_job = table.filter(all_job, function(x) return x ~= "副手换人" end)
@@ -2575,7 +2576,7 @@ notify_wechat = function(webhookurl, info, img, md5)
     local body = { msgtype = "text", text = { content = info } }
     local res, code = httpPost(webhookurl, JsonEncode(body), 15,
         "Content-Type: application/json;charset=UTF-8")
-    if code ~= 200 then print("Wechat text failed" .. status_code .. res) end
+    if code ~= 200 then print("Wechat text failed" .. code .. res) end
     -- 推送图片 因为markdown格式限制4kb 使用文件上传获取media麻烦，故图片文字分开发送
     if img ~= nil then
         local body = { msgtype = "image", image = { base64 = img, md5 = md5 } }
@@ -2584,7 +2585,7 @@ notify_wechat = function(webhookurl, info, img, md5)
         if code == 200 then
             print("Wechat notify successfully")
         else
-            print("Wechat picture failed" .. status_code .. res)
+            print("Wechat picture failed" .. code .. res)
         end
     end
 end
@@ -2645,6 +2646,16 @@ end
 --   log("已更新至最新")
 --   return restartScript()
 -- end
+
+unpacking_library = function()
+    if root_mode then
+        mkdir(getWorkPath() .. "/assets")
+        extractAssets("sqlite.rc", getWorkPath() .. "/assets")
+        exec(string.format([[su root sh -c "cp '%s/assets/sqlite3.2' '/data/local/tmp/sqlite3'"]], getWorkPath()))
+        setFilePremission("/data/local/tmp/sqlite3", 777)
+        _G.sqlite3path = "/data/local/tmp/sqlite3"
+    end
+end
 
 check_hot_update = function()
     toast("正在检查更新...")
@@ -2729,11 +2740,12 @@ uploadStatistician = function(is_download)
 end
 
 hotUpdate = function()
-    if disable_hotupdate then
+    if disable_hotupdate or dev_mode then
         log("热更新已禁用")
         return
     end
     local update_info = check_hot_update()
+    if not update_info then return false end
     if not update_info.updateLr and not update_info.updateSkill then
         toast("已经是最新版")
         uploadStatistician(false)
@@ -3031,12 +3043,18 @@ show_debug_ui = function()
     ui.addEditText(layout, "captcha_password", "")
 
     newRow(layout)
+    ui.addCheckBox(layout, "only_use_ttshitu", "仅使用图鉴打码", true)
+
+    newRow(layout)
     addTextView(layout, "审判庭服务地址")
     ui.addEditText(layout, "cloud_server", "")
 
     newRow(layout)
     addTextView(layout, "审判庭设备标识")
     ui.addEditText(layout, "cloud_device_token", "")
+
+    newRow(layout)
+    ui.addCheckBox(layout, "log_login_to_cloud", "上报登录流程", false)
 
     newRow(layout)
     addTextView(layout, "审判庭打码地址")
@@ -3050,6 +3068,9 @@ show_debug_ui = function()
     ui.addCheckBox(layout, "cloud_get_task", "审判庭接受任务", false)
 
     newRow(layout)
+    ui.addCheckBox(layout, "new_change_account_plan", "新版切号方案（测试）", false)
+
+    newRow(layout)
     addTextView(layout, "单号最大登录次数")
     ui.addEditText(layout, "max_login_times", "")
 
@@ -3059,7 +3080,7 @@ show_debug_ui = function()
 
     newRow(layout)
     addTextView(layout, "单关卡最大连续代理/导航失败次数")
-    ui.addEditText(layout, "max_fight_failed_times", "2")
+    ui.addEditText(layout, "max_fight_failed_times", "3")
 
     newRow(layout)
     addTextView(layout, "单号最大成功剿灭次数")
@@ -3116,6 +3137,13 @@ show_debug_ui = function()
     newRow(layout)
     ui.addCheckBox(layout, "delete_download_floder",
         "自动清理download文件夹", false)
+
+    newRow(layout)
+    addTextView(layout, "搬商店时间在活动")
+    ui.addSpinner(layout, "shop_period", { "结束前", "结束后", "结束前后", "每一次" }, 1)
+    addTextView(layout, "的第")
+    ui.addSpinner(layout, "shop_day", { "1", "2", "3", "4", "5" }, 0)
+    addTextView(layout, "天当天")
 
     newRow(layout)
     addTextView(layout, "QQ通知账号")
@@ -4058,7 +4086,7 @@ parse_fight_config = function(fight_ui)
         elseif table.includes(table.keys(extrajianpin2name), v) then
             v = extrajianpin2name[v]
         end
-        if table.find({ '活动' }, startsWithX(v)) then
+        if table.find({ '活动', 'RS' }, startsWithX(v)) then
             local idx = v:gsub(".-(%d+)$", '%1')
             v = "HD-" .. (idx or '')
             -- log(2731, v, idx)
@@ -4086,18 +4114,18 @@ parse_fight_config = function(fight_ui)
             for _ = 1, 99 do table.insert(expand_fight, '长期委托2') end
             for _ = 1, 99 do table.insert(expand_fight, '长期委托3') end
         elseif table.includes({ 'HD' }, v) then
-            for _, i in pairs({ 9, 8, 7 }) do
+            for i = 8, 1, -1 do
                 for _ = 1, 99 do table.insert(expand_fight, v .. '-' .. i) end
             end
         elseif table.includes({ 'HD1' }, v) then
-            for i = 10, 1, -1 do table.insert(expand_fight, 'HD' .. '-' .. i) end
+            for i = 8, 1, -1 do table.insert(expand_fight, 'HD' .. '-' .. i) end
             table.insert(expand_fight, "BREAK")
         elseif table.includes({ '扭转醇', '轻锰矿', 'RMA70-12', '固源岩组', '固源岩', '研磨石', '全新装置',
                 '装置',
                 '聚酸酯组', '聚酸酯', '糖组', '糖', '异铁组', '异铁', '酮凝集组', '酮凝集', '凝胶',
                 '炽合金', '晶体元件', '半自然溶剂', '化合切削液', '转质盐组' }, v) then
             if v == '扭转醇' then
-                for _, i in pairs({ '6-11', '11-13' }) do
+                for _, i in pairs({ 'GT-5', '6-11', '11-13' }) do
                     for _ = 1, 99 do table.insert(expand_fight, i) end
                 end
             elseif v == '轻锰矿' then
@@ -4219,7 +4247,7 @@ update_state_from_ui = function()
     -- log("fight", fight)
 
     -- 活动开放时间段
-    hd_open_time_end = parse_time("202309190400")
+    hd_open_time_end = parse_time("202312190400")
     hd_shop_open_time_end = parse_time("202309260400")  -- 活动商店关闭时间
     hd2_open_time_end = parse_time("202303210400")
     hd2_shop_open_time_end = parse_time("202302240400") -- 活动2商店关闭时间
@@ -4227,8 +4255,8 @@ update_state_from_ui = function()
     hd2_mod = "故事集"
 
     -- 资源关全天开放时间段
-    all_open_time_start = parse_time("202303211600")
-    all_open_time_end = parse_time("202304040400")
+    all_open_time_start = parse_time("202311211600")
+    all_open_time_end = parse_time("202312050400")
     update_open_time()
 
     -- 危机合约时间段，只为加速平时的信用交易所
@@ -4431,7 +4459,12 @@ hideControlBar = function() showControlBar(false) end
 
 ocr = function(r, max_height)
     -- releaseCapture()
-    r = point[r]
+    if type(r) == 'string' then
+        r = point[r]
+    end
+    if type(r) ~= 'table' then
+        return {}
+    end
     log("ocrinput", r, max_height)
     local d1 = scale(math.random(-1, 1))
     local d2 = scale(math.random(-1, 1))

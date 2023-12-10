@@ -1,14 +1,16 @@
 #!/usr/bin/env python
-import os
-import fire
-from pathlib import Path
-import json
 import io
-from collections import defaultdict
-import re
 import itertools
-import tempfile
+import json
+import os
+import re
 import subprocess
+import tempfile
+from collections import defaultdict
+from pathlib import Path
+
+import fire
+
 
 # 请使用720p图像计算
 
@@ -137,12 +139,13 @@ def avator2operator(src="ArknightsGameData/zh_CN/gamedata/excel/character_table.
     return json.dumps(ans, ensure_ascii=False)
 
 
+# https://github.com/yuanyan3060/ArknightsGameResource 使用此解包仓库
 def skillicon2operator(
-    char="../ArkAssetsTool/ArkAssets/gamedata/excel/[unpack]character_table/character_table.json",
-    build="../ArkAssetsTool/ArkAssets/gamedata/excel/[unpack]building_data/building_data.json",
+        char=os.path.join(os.getcwd(), "ArknightsGameResource/gamedata/excel/character_table.json"),
+        build=os.path.join(os.getcwd(), "ArknightsGameResource/gamedata/excel/building_data.json"),
 ):
-    char = json.loads(open(char).read())
-    build = json.loads(open(build).read())
+    char = json.loads(open(char, encoding='utf-8').read())
+    build = json.loads(open(build, encoding='utf-8').read())
 
     char2name = {k: char[k]["name"] for k in char}
     buffid2name = {}
@@ -156,34 +159,35 @@ def skillicon2operator(
                 buffid = b2["buffId"]
                 buffname = buffid2name[buffid]
                 operator = char2name[c]
-                phase = b2["cond"]["phase"]
+                phase = (b2["cond"]["phase"])[-1]
                 ans[buffname].append(operator + str(phase))
 
     return json.dumps(ans, ensure_ascii=False)
 
 
 def recruit(
-    char="../ArkAssetsTool/ArkAssets/gamedata/excel/[unpack]character_table/character_table.json",
-    gacha="../ArkAssetsTool/ArkAssets/gamedata/excel/[unpack]gacha_table/gacha_table.json",
-    to="lua",
+        char=os.path.join(os.getcwd(), "ArknightsGameResource/gamedata/excel/character_table.json"),
+        gacha=os.path.join(os.getcwd(), "ArknightsGameResource/gamedata/excel/gacha_table.json"),
+        to="lua",
 ):
-    char = json.loads(open(char).read())
-    gacha = json.loads(open(gacha).read())
+    char = json.loads(open(char, encoding='utf-8').read())
+    gacha = json.loads(open(gacha, encoding='utf-8').read())
     tag = [x["tagName"] for x in gacha["gachaTags"] if x["tagId"] < 100]
 
     recruit_char = gacha["recruitDetail"]
     recruit_char = re.sub(r"<[^>]+>", "", recruit_char, 0)
     recruit_char = re.findall(r"\\n(.*)", recruit_char)
     recruit_char = set(y.strip() for x in recruit_char for y in x.split("/"))
+    print(recruit_char)
 
     # 排除非公招干员
     char = {k: v for k, v in char.items() if v["name"] in recruit_char}
 
     # 排除6星干员，没有高级资深一定不出6星，没有资深可能出5星
-    char = {k: v for k, v in char.items() if v["rarity"] + 1 < 6}
+    char = {k: v for k, v in char.items() if v["rarity"]+1 < 6}
 
     # 排除12星干员，拉满9小时最低3星
-    char = {k: v for k, v in char.items() if v["rarity"] + 1 >= 3}
+    char = {k: v for k, v in char.items() if v["rarity"]+1 >= 3}
 
     profession2tag = defaultdict(
         lambda: "???",
@@ -213,7 +217,6 @@ def recruit(
             1: "支援机械",
         },
     )
-
     char2tag = {
         v["name"]: list(
             filter(
@@ -229,8 +232,7 @@ def recruit(
         for k, v in char.items()
     }
 
-    char2star = {v["name"]: v["rarity"] + 1 for k, v in char.items()}
-
+    char2star = {v["name"]: v["rarity"]+1 for k, v in char.items()}
     tag2char = defaultdict(set)
     for c, t in char2tag.items():
         for t in t:
@@ -340,7 +342,7 @@ def screencap(stem):
     serial = "127.0.0.1:5555"
     subprocess.run(["adb", "connect", serial])
     subprocess.Popen(
-        f"adb -s {serial} exec-out screencap -p > {screencap/stem}.jpg",
+        f"adb -s {serial} exec-out screencap -p > {screencap / stem}.jpg",
         shell=True,
     )
 
@@ -358,7 +360,7 @@ def screencap_distance(path="screencap"):
     distance = defaultdict(int)
     shift_right = 0
     # 滑动到最右边时 hd-1的x坐标相距屏幕中心的距离
-    distance[1] = 385
+    distance[1] = 140
     for x in sorted(screencap.glob("*.jpg")):
         x = reader.readtext(str(x))
         print("x", x)
@@ -402,11 +404,36 @@ def screencap_distance(path="screencap"):
         print(f'["HD-{x}"] = ' + "{" + str(p[0]) + "," + str(p[1]) + "},")
 
     # 距离膨胀系数，部分活动需要微调
-    distanceExpansionCoefficient = 1.14
+    distanceExpansionCoefficient = 1.10
     for x in sorted(distance):
         p = distance[x] - shift_right
         p = int(p * distanceExpansionCoefficient)
         print(f'["HD-{x}"] = ' + "{ swip_right_max, -" + str(p) + "},")
+
+
+def process_transparent_pixels(input_folder=os.path.join(os.getcwd(), "ArknightsGameResource/skill"),
+                               output_folder=os.path.join(os.getcwd(), "ArknightsGameResource/skill_new")):
+    # 用于处理技能图标背景 不知道为什么透明背景识别失败
+    import os
+    import shutil
+    from PIL import Image
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    for filename in os.listdir(input_folder):
+        input_path = os.path.join(input_folder, filename)
+        output_path = os.path.join(output_folder, filename)
+        if filename.endswith('.png'):
+            image = Image.open(input_path).convert('RGBA')
+            pixels = image.load()
+            for i in range(image.width):
+                for j in range(image.height):
+                    r, g, b, a = pixels[i, j]
+                    if a == 0:
+                        pixels[i, j] = (61, 61, 61, 255)
+            image.save(output_path)
+        else:
+            shutil.copy2(input_path, output_path)
 
 
 if __name__ == "__main__":

@@ -30,7 +30,9 @@ path.base = {
 
     账号登录 = function() tap("账号登录") end,
     开始唤醒 = function()
-        cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        if log_login_to_cloud == true then
+            cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        end
         check_login_frequency()
         wait(function()
             tap("开始唤醒")
@@ -39,7 +41,9 @@ path.base = {
     end,
     手机验证码登录 = disable_game_up_check_wrapper(function()
         if appid ~= oppid then return end
-        cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        if log_login_to_cloud == true then
+            cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        end
         if not username or #username == 0 or not password or #password == 0 then
             -- 单账号直接停，多账号跳过
             stop("账号或密码为空", account_idx and 'next' or '')
@@ -128,7 +132,9 @@ path.base = {
         if login_error_times > 1 then
             stop("单选确认框，密码错误？", account_idx and 'next' or '')
         end
-        cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+        if log_login_to_cloud == true then
+            cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+        end
     end),
     正在释放神经递质 = function()
         if not disappear("正在释放神经递质", 1800, 1) then
@@ -364,15 +370,25 @@ path.base = {
     end,
 
     bilibili_framelayout_only = function()
-        cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        if log_login_to_cloud == true then
+            cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        end
         auto(path.bilibili_login, nil, 0, default_auto_timeout_second, true)
-        cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+        if log_login_to_cloud == true then
+            cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+        end
+        if new_change_account_plan then 快速切号功能状态 = false end
     end,
 
     framelayout_only = function()
-        cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        if log_login_to_cloud == true then
+            cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+        end
         auto(path.login, nil, 0, default_auto_timeout_second, true)
-        cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+        if log_login_to_cloud == true then
+            cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+        end
+        if new_change_account_plan then 快速切号功能状态 = false end
     end,
 
 }
@@ -496,7 +512,7 @@ path.bilibili_login = {
 
             if appear({ "B服安全验证失败", "B服安全验证失败320DPI" }) then
                 cloud.captcha_report()
-                ssleep(3.0)
+                ssleep(2.0)
 
                 log("使用图鉴打码")
                 if trySolvePointSelectionCapture(captcha_username, captcha_password, box) then
@@ -717,6 +733,7 @@ path.fallback = {
         if not appear("面板") then tap("开包skip") end
     end,
     产业合作洽谈会 = function()
+        ssleep(1)
         wait(function() tap("产业合作洽谈会策略") end, 2)
         wait(function()
             tap('返回')
@@ -856,6 +873,7 @@ path.fallback = {
         return path.fallback.签到返回()
     end,
     活动签到返回 = function()
+        ssleep(0.5) -- 等待签到界面加载
         for u = screen.width // 2 + scale(825 - 1920 // 2), screen.width // 2 +
         scale(1730 - 1920 // 2), scale(100) do tap({ u, scale(500) }) end
         for v = screen.height // 2 + scale(180 - 1080 // 2), screen.height // 2 +
@@ -950,6 +968,36 @@ path.fallback = {
         wait(function()
             tap("九色鹿签到返回")
             ssleep(.2)
+            -- tap("开包skip")
+            if not appear("面板") then tap("开包skip") end
+            if appear("面板", 1) then
+                return true
+            else
+                tap("开包skip")
+            end
+        end, 5)
+    end,
+    战备支援签到返回 = function()
+        wait(function()
+            tap("战备支援签到")
+            ssleep(.2)
+        end, 1)
+        wait(function()
+            tap("战备支援签到返回")
+            ssleep(.2)
+            tap("开包skip")
+            if not appear("面板") then tap("开包skip") end
+            if appear("面板", 1) then return true end
+        end, 5)
+    end,
+    九色鹿签到返回 = function()
+        wait(function()
+            tap("九色鹿签到")
+            ssleep(.2)
+        end, 1)
+        wait(function()
+            tap("九色鹿签到返回")
+            ssleep(.2)
             tap("开包skip")
             if not appear("面板") then tap("开包skip") end
             if appear("面板", 1) then return true end
@@ -1027,7 +1075,7 @@ path.限时活动 = function(retry)
 
     -- 只包含主页红点
     retry = retry or 0
-    if retry > 5 then return end
+    if retry > 10 then return end
     path.跳转("首页")
     local p = findAny({
         "面板限时活动", "面板限时活动2", "面板限时活动3",
@@ -1109,6 +1157,28 @@ path.限时活动 = function(retry)
         return
     end
     return path.限时活动(retry + 1)
+end
+
+path.账户数据保存 = function()
+    if new_change_account_plan and _G.快速切号功能状态 == false then
+        log("未查询到保存的登录数据或数据已经失效")
+        if appid == "com.hypergryph.arknights" then
+            local user_token = official_get_last_login()
+            if user_token then
+                log("官服登录保存登录数据ing")
+                user_token = encodeBase64(user_token)
+                save_local_config("account", username .. "token", user_token)
+                save_local_config("account", username .. "hyperautologin", true)
+            end
+        elseif appid == "com.hypergryph.arknights.bilibili" then
+            local userid = bilibili_get_lastlogin_uid()
+            if userid then
+                log("b服登录保存userid")
+                save_local_config("account", username .. "userid", userid)
+                save_local_config("account", username .. "biliautologin", true)
+            end
+        end
+    end
 end
 
 path.邮件收取 = function()
@@ -3226,6 +3296,8 @@ get_fight_type = function(x)
         return "物资芯片"
     elseif table.any({ "CW" }, f) then
         return "插曲"
+    elseif table.any({ "GT" }, f) then
+        return "别传"
     elseif table.any(table.values(jianpin2name), f) then
         return "剿灭"
     elseif f('HD') then
@@ -3693,7 +3765,8 @@ path.主线 = function(x)
             tap("幻灭")
             ssleep(.5)
         end
-
+        -- 新章节开启后,怒号光明这个点位恰好适配所有新开的章节,否则新章节导航这里将失败
+        -- 如果后续在"残阳"之后加新的篇章,这里的导航可能都会失败,如点两次觉醒无法导航到第一篇
         if not appear("怒号光明") then return end
 
         log("1046", chapter)
@@ -3749,6 +3822,46 @@ path.插曲 = function(x)
     end
     swip(x)
     ssleep(.5)
+    tap("作战列表" .. x)
+    if not appear("开始行动") then
+        wait(function()
+            if appear("主页") then return true end
+            back()
+        end, 30)
+    end
+    path.开始游戏(x)
+end
+
+path.别传 = function(x)
+    log("别传")
+    local chapter = x:find("-")
+    chapter = x:sub(1, chapter - 1)
+    if findOne("开始行动") then return path.开始游戏(x) end
+    path.跳转("首页")
+    tap("面板作战")
+    if not appear("主页") then return end
+    if not wait(function()
+            if findOne("别传界面") then return true end
+            tap("别传")
+        end) then
+        return
+    end
+    if not wait(function()
+            -- point模块加载时将GT打平到point,这里对应直接点击别传左侧具体是哪个别传类型的坐标,如骑兵与猎人或火蓝之心等
+            tap("别传列表" .. chapter)
+            if findOne("进入活动") then return true end
+        end) then
+        return
+    end
+    if not wait(function()
+            tap("进入活动")
+            if not appear("进入活动") then return true end
+        end) then
+        return
+    end
+    swip(x)
+    ssleep(.5)
+    -- point模块加载时将GT打平到point,这里对应直接点击具体的关卡坐标
     tap("作战列表" .. x)
     if not appear("开始行动") then
         wait(function()
@@ -4140,48 +4253,6 @@ path.活动 = function(x)
         return true
     end
     -- car_check()
-    local car_check = function()
-        if car_checked then return end
-        car_checked = true
-        fight_failed_times[cur_fight] = (fight_failed_times[cur_fight] or 0) - 1
-        if not appear("艺术评论", 1) then return end
-
-        if not wait(function()
-                tap("艺术评论")
-                if disappear("艺术评论", 1) then return true end
-            end, 5) then
-            return
-        end
-
-        wait(function() tap({ screen.width // 2, screen.height // 2 }) end, 1)
-
-        local ws = { 597, 1204, 1830 }
-
-        for _, w in pairs(ws) do
-            w = screen.width // 2 + scale(w - 1920 // 2)
-            for h = scale(211), scale(900), scale(52) do tap({ w, h }) end
-        end
-
-        local paths = {
-            {
-                point = { { screen.width // 2, scale(600) }, { screen.width // 2, scale(0) } },
-                duration = 500,
-            },
-        }
-        gesture(paths)
-        ssleep(1.5)
-
-        for _, w in pairs(ws) do
-            w = screen.width // 2 + scale(w - 1920 // 2)
-            for h = scale(211), scale(900), scale(52) do tap({ w, h }) end
-        end
-        if not wait(function()
-                if appear("活动导航0", 1) then return true end
-                tap("返回")
-            end, 5) then
-            return
-        end
-    end
 
     local car_check = function()
         if car_checked then return end
@@ -4337,7 +4408,249 @@ path.活动 = function(x)
             return
         end
     end
+
+    local car_check = function()
+        if car_checked then return end
+        car_checked = true
+
+        fight_failed_times[cur_fight] = (fight_failed_times[cur_fight] or 0) - 1
+
+        向下滑动 = function()
+            log("滑动")
+            ssleep(1.5)
+            gesture({
+                {
+                    point = { { screen.width * 0.5, screen.height * 0.95 },
+                        { screen.width * 0.5, screen.height * 0.95 - point["向上滑动距离"][2] } },
+                    start = 0,
+                    duration = 1500,
+                },
+            })
+            ssleep(1)
+        end
+
+        返回循心初始页面 = function()
+            log("回到循心初始页面")
+            path.跳转("首页")
+            tap("面板活动")
+            if not wait(function()
+                    if findOne("查访初始页面") then return true end
+                    ssleep(.2)
+                    tap("招募说明关闭")
+                    if findOne("活动导航0") then tap("进入循心觅迹") end
+                end, 10) then
+            end
+            --return
+        end
+
+        --空库存未做
+        构建法术 = function(情绪, 欲念)
+            情绪 = 情绪 or "乐"
+            欲念 = 欲念 or "权柄"
+            log("构建法术开始")
+            log(情绪)
+            log(欲念)
+
+            -- 界面判断
+            log(81)
+            if findOne("查访初始页面") then
+                tap("前往构建法术")
+            end
+
+            --初次进入到【构建法术页面】时，可能会出现教程
+            if not wait(function()
+                    if findOne("构建法术页面") then return true end
+                    ssleep(1)
+                    tap("招募说明关闭")
+                end, 3) then
+            end
+
+            --联结第一步，选择情绪
+            if not wait(function()
+                    if findOne("联结第一步") then return true end
+                    tap(情绪)
+                    ssleep(.1)
+                end, 3) then
+            end
+            ssleep(.5)
+            tap("联结第一步")
+
+            appear("联结第二步")
+
+            -- 联结第二步，选择欲念
+            if not findOne("联结第二步") then return false end -- 库存不足
+
+            ssleep(.5)
+            if 欲念 == "尘俗" then
+                tap("欲念左")
+            elseif 欲念 == "智识" then
+                tap("欲念右")
+            end
+            log(53)
+            ssleep(0.5)
+            tap("联结第二步")
+            ssleep(1.5)
+            if not wait(function()
+                    if findOne("构建法术页面") then return true end
+                    tap("联结成功勾")
+                end, 6) then
+            end
+        end
+
+        已经构建法术 = false
+        local ocr查访 = { "普通查访0范围", "普通查访1范围", "普通查访2范围" }
+        local ocr查访突发 = { "突发查访0范围", "突发查访1范围", "突发查访2范围" }
+        local 等待查访角色 = {}
+        log(1)
+        wait(function()
+            返回循心初始页面()
+            log(70)
+
+            --突发事件时候，把上面【ocr查访】改成【ocr查访突发】
+            if findOne("突发查访") then
+                ocr查访 = ocr查访突发
+                if findOne("突发例行查访完成") then return true end
+            end
+
+            if findOne("例行查访完成") then return true end
+
+
+            --第一步，ocr识别所需要的查访对象名字和坐标,
+            --有时候识别出问题，放这里进行多次循环
+            for _, v in pairs(ocr查访) do
+                local cf = ocr(v)
+                local 待查访干员 = contains_character(table2string(cf), point.循心角色)
+                if 待查访干员 ~= nil then
+                    --插入{"名字,坐标x，坐标y"},名字用来查表合成乐章，坐标拿来点击
+                    table.insert(等待查访角色, { 待查访干员, cf[1].l, cf[1].b })
+                end
+                log(待查访干员)
+            end
+            log(71)
+
+            if #等待查访角色 == 0 then
+                return true
+            end
+
+            --第二步，根据名字构建相应的法术
+            --合成只做一次，默认当数量足够来做，卡住的话超时跳出
+            if not 已经构建法术 then
+                for _, v in pairs(等待查访角色) do
+                    local 等待查访名字 = v[1]
+                    if 构建法术(point.char2tag[等待查访名字].情绪, point.char2tag[等待查访名字].欲望) == false then
+                        log("构建法术失败,情绪不足")
+                        return true -- 情绪不足
+                    end
+                    ssleep(.5)
+                    返回循心初始页面()
+                end
+                已经构建法术 = true
+            end
+            log(72)
+
+            --第三步，挨个去给予法术
+            for _, v in pairs(等待查访角色) do
+                local 等待查访名字 = v[1]
+                local 情绪 = point.char2tag[v[1]].情绪
+                local 欲望 = point.char2tag[v[1]].欲望
+                log(等待查访名字 .. " " .. 情绪 .. " " .. 欲望)
+
+                --在查访初始页面，点击前面查找好的人物查访
+                if findOne("查访初始页面") then
+                    tap({ v[2], v[3] })
+                else
+                    返回循心初始页面()
+                end
+                ssleep(.5)
+
+                --把问题问完，进入到"选择心扉之乐界面"
+                if not wait(function()
+                        if findOne("选择心扉之乐界面") then return true end
+                        tap("查访内跳过")
+                        tap("查访内继续提问")
+                        tap("查访内选择乐章")
+                    end, 10) then
+                    return false
+                end
+                if not findOne("选择心扉之乐界面") then return false end
+                ssleep(.5)
+
+
+                --点击到相应的"X之章",
+                local X之章 = 情绪 .. "之章"
+                tap(X之章)
+                log(82)
+                ssleep(1)
+
+                --不考虑心情，三种欲望都去尝试点击
+
+                for i = 1, 18 do
+                    if not wait(function()
+                            --写死的坐标，点击相应的“欲望”时候，
+                            --第一个到第9个挨个尝试
+                            tap({ scale(point.心扉之乐内9种欲望[(i % 6) == 0 and 6 or (i % 6)][1])
+                            , scale(point.心扉之乐内9种欲望[(i % 6) == 0 and 6 or (i % 6)][2]) })
+                            if findOne("复现场景") then return true end
+                            ssleep(.2)
+                        end, 10) then
+                        return false
+                    end
+                    ssleep(.1)
+                    tap("复现场景")
+
+                    if not wait(function()
+                            if findOne("心绪相符") then return true end
+                            if findOne("心绪不符") then
+                                tap("心绪不符")
+                                return true
+                            end
+                            ssleep(.2)
+                        end, 3) then
+                    end
+
+
+                    if findOne("心绪相符") then
+                        --心绪相符的时候，点击完会有一个奖励箱子出现，
+                        --不知道为什么会卡住，加了点判断
+                        tap("心绪相符")
+                        if not wait(function()
+                                if findOne("选择心扉之乐界面") then return true end
+                                tap("开包skip")
+                                ssleep(.2)
+                            end, 3) then
+                        end
+                        返回循心初始页面()
+                        log(81)
+                        break
+                    end
+
+                    if not wait(function()
+                            if findOne("选择心扉之乐界面") then return true end
+                            if findOne("复现场景") then return true end
+                            tap("开包skip")
+                        end, 10) then
+                    end
+
+                    if (i % 6) == 0 then
+                        log("当前页无匹配")
+                        if not wait(function()
+                                if not findOne("心绪不符") then return true end
+                                tap("心绪不符")
+                            end, 3) then
+                        end
+                        向下滑动()
+                    end
+                    ssleep(1)
+                end
+                --返回循心初始页面() -- 9次均尝试后 无论是否成功，回到主页
+            end
+        end, 90)
+        log(666)
+        返回循心初始页面()
+    end
+
     -- car_check()
+
     if not findOne("活动导航0") then return end
     if not wait(function()
             -- local level = str2int(x:sub(#x), 1)
@@ -4351,25 +4664,16 @@ path.活动 = function(x)
         return
     end
 
-    -- ssleep(2)
+    --[[ssleep(2)
+    swip(x)
+    ssleep(.5)]]
+
+    appear("活动导航2")
 
     swip(x)
     ssleep(.5)
     tap("作战列表" .. x)
 
-    -- appear("活动导航2")
-    -- if not wait(function()
-    --   tap("活动导航2")
-    --   if not appear("活动导航2", 1) then return true end
-    -- end, 5) then return end
-    -- local paths = {
-    --   {point = {{scale(40), scale(600)}, {scale(40), scale(0)}}, duration = 500},
-    -- }
-    -- gesture(paths)
-    -- ssleep(1)
-    -- gesture(paths)
-    -- ssleep(1.5)
-    -- if not findTap(x) then return end
     if not appear("开始行动") then
         wait(function()
             if appear("主页") then return true end
@@ -4710,6 +5014,115 @@ path.ss活动任务与商店 = function()
                 if findOne("活动导航0") then return true end
             end, 5) then
             return
+        end
+    end
+end
+
+path.商店搬空 = function()
+    local t = os.time()
+    if _G.shop_period == nil or _G.shop_period > 3 or _G.shop_period < 0 then _G.shop_period = 1 end
+    if _G.shop_day == nil or _G.shop_day > 4 or _G.shop_day < 0 then _G.shop_day = 0 end
+
+    -- 搬商店时间
+    interval = t - hd_open_time_end
+    if shop_period == 0 and not (interval < 0 and t > hd_open_time_end - 86400 * (shop_day + 1) and t < hd_open_time_end - 86400 * shop_day) then
+        return
+    elseif shop_period == 1 and not (interval > 0 and t < hd_open_time_end + 86400 * (shop_day + 1) and t > hd_open_time_end + 86400 * shop_day) then
+        return
+    elseif shop_period == 2 and not ((t > hd_open_time_end - 86400 * (shop_day + 1) and t < hd_open_time_end - 86400 * shop_day) or (t < hd_open_time_end + 86400 * (shop_day + 1) and t > hd_open_time_end + 86400 * shop_day)) then
+        return
+    end
+    log("商店清空任务")
+    path.跳转("首页")
+    -- 进入商店
+    tap("面板活动")
+    if not wait(function()
+            if findOne("活动导航0") then return true end
+        end, 10) then
+        return path.跳过剧情()
+    end
+
+    if not wait(function()
+            tap("活动商店导航")
+            if findOne("商店主页") then return true end
+        end, 5) then
+    end
+
+    disappear("正在提交反馈至神经", network_timeout)
+
+    -- 防止各种掉帧等导致卡在领取等页面
+    回到商店主页 = function()
+        if not wait(function()
+                if findOne("商店主页") then return true end
+                tap("商店顶栏")
+                ssleep(0.2)
+            end, 10) then
+            return
+        end
+    end
+
+    向左滑动 = function()
+        gesture({
+            {
+                point = { { screen.width * 0.95, screen.height / 2 }, { screen.width * 0.95 - point["商店滑动距离"][1], screen.height / 2 } },
+                start = 0,
+                duration = 1500,
+            },
+        }) -- 滑动大约3个商品的距离
+    end
+
+    if not findOne("商店主页") then return end
+
+    local 初始物品, 物品横间距, 物品纵间距 = point["商店初始物品"], point["商店物品间隔"][1], point["商店物品间隔"][2]
+    while true do
+        for x = 0, 3 do -- 3*3商品进行购买
+            for y = 0, 3 do
+                local sx = { 初始物品[1] + x * 物品横间距, 初始物品[2] + y * 物品纵间距 }
+                log(x, y, sx[1], sx[2])
+                回到商店主页()
+                ssleep(0.5)
+                if not findOne("商店主页") then return end -- 防止跳到其他页面
+                -- 点击商品，进入购买页面判断
+                if not wait(function()
+                        tap(sx)
+                        if findOne("商店购买页面") then return true end
+                    end, 1) then
+                end
+                if not findOne("商店购买页面") then
+                    log("未能进入商品，大概是售空了吧~")
+                    goto continue
+                end
+
+                -- 点击购买
+                if not wait(function()
+                        tap("商店最多")
+                        ssleep(0.3)
+                        tap("商店支付")
+                        if not findOne("商店购买页面", 1) then return true end
+                    end, 3) then
+                end
+
+                if findOne("商店购买页面", 1) then
+                    log("购买失败，大抵是没钱了吧~")
+                    return true
+                end
+                disappear("正在提交反馈至神经", network_timeout)
+
+                ::continue::
+                回到商店主页()
+                log("开始下一个商品")
+            end
+        end
+        回到商店主页()
+        ssleep(1)
+        if not findOne("商店主页") then return end -- 防止跳到其他页面
+        local sx = { screen.width * 0.8, screen.height * 0.5 }
+        local oricol = getColor(sx[1], sx[2])
+        向左滑动()
+        ssleep(3)
+        if getColor(sx[1], sx[2]) == oricol then
+            log("大概滑动到底了吧~")
+            return true
         end
     end
 end
@@ -5659,17 +6072,25 @@ path.退出账号 = function()
             return findOne("bilibili_framelayout_only") and
                 not findOne("bilibili_username_inputbox")
         end] = function()
-            cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+            if log_login_to_cloud == true then
+                cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+            end
             auto(path.bilibili_login_change, nil, 0, default_auto_timeout_second, true)
-            cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+            if log_login_to_cloud == true then
+                cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+            end
         end,
         framelayout_only = false,
         [function()
             return findOne("framelayout_only") and not findOne("username_inputbox")
         end] = function()
-            cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+            if log_login_to_cloud == true then
+                cloud.addLog("INFO", "开始登录", "正在尝试登录", "")
+            end
             auto(path.login_change, nil, 0, default_auto_timeout_second, true)
-            cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+            if log_login_to_cloud == true then
+                cloud.addLog("INFO", "登录成功", "已成功登录至游戏", "")
+            end
         end,
         面板 = function()
             tap("面板设置", true)
